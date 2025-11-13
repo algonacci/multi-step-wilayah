@@ -1,25 +1,34 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-interface Province {
+const API_BASE_URL = "https://www.emsifa.com/api-wilayah-indonesia/api";
+
+interface Region {
   id: string;
   name: string;
 }
 
-interface City {
-  id: string;
-  name: string;
-}
-
-interface District {
-  id: string;
-  name: string;
-}
-
-interface Village {
-  id: string;
-  name: string;
-}
+// Custom hook untuk fetch region data
+const useRegionData = (
+  endpoint: string,
+  queryKey: string,
+  dependency?: string
+) => {
+  return useQuery<Region[]>({
+    queryKey: [queryKey, dependency],
+    queryFn: async () => {
+      const url = dependency
+        ? `${API_BASE_URL}/${endpoint}/${dependency}.json`
+        : `${API_BASE_URL}/${endpoint}.json`;
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch ${queryKey}`);
+      }
+      return response.json();
+    },
+    enabled: dependency !== undefined ? !!dependency : true,
+  });
+};
 
 const App = () => {
   const [selectedProvince, setSelectedProvince] = useState<string>("");
@@ -27,48 +36,29 @@ const App = () => {
   const [selectedDistrict, setSelectedDistrict] = useState<string>("");
   const [selectedVillage, setSelectedVillage] = useState<string>("");
 
-  const { data: provinces } = useQuery<Province[]>({
-    queryKey: ["provinces"],
-    queryFn: async () => {
-      const response = await fetch(
-        "https://www.emsifa.com/api-wilayah-indonesia/api/provinces.json"
-      );
-      return response.json();
-    },
-  });
+  const {
+    data: provinces,
+    isLoading: isLoadingProvinces,
+    error: errorProvinces,
+  } = useRegionData("provinces", "provinces");
 
-  const { data: cities } = useQuery({
-    queryKey: ["cities", selectedProvince],
-    queryFn: async () => {
-      const response = await fetch(
-        `https://www.emsifa.com/api-wilayah-indonesia/api/regencies/${selectedProvince}.json`
-      );
-      return response.json();
-    },
-    enabled: !!selectedProvince,
-  });
+  const {
+    data: cities,
+    isLoading: isLoadingCities,
+    error: errorCities,
+  } = useRegionData("regencies", "cities", selectedProvince);
 
-  const { data: districts } = useQuery({
-    queryKey: ["districts", selectedCity],
-    queryFn: async () => {
-      const response = await fetch(
-        `https://www.emsifa.com/api-wilayah-indonesia/api/districts/${selectedCity}.json`
-      );
-      return response.json();
-    },
-    enabled: !!selectedCity,
-  });
+  const {
+    data: districts,
+    isLoading: isLoadingDistricts,
+    error: errorDistricts,
+  } = useRegionData("districts", "districts", selectedCity);
 
-  const { data: villages } = useQuery({
-    queryKey: ["villages", selectedDistrict],
-    queryFn: async () => {
-      const response = await fetch(
-        `https://www.emsifa.com/api-wilayah-indonesia/api/villages/${selectedDistrict}.json`
-      );
-      return response.json();
-    },
-    enabled: !!selectedDistrict,
-  });
+  const {
+    data: villages,
+    isLoading: isLoadingVillages,
+    error: errorVillages,
+  } = useRegionData("villages", "villages", selectedDistrict);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-12 px-4 sm:px-6 lg:px-8">
@@ -83,6 +73,19 @@ const App = () => {
         </div>
 
         <div className="bg-white rounded-lg shadow-lg p-6 space-y-6">
+          {/* Error Messages */}
+          {(errorProvinces || errorCities || errorDistricts || errorVillages) && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+              <p className="font-semibold">Terjadi Kesalahan:</p>
+              <ul className="list-disc list-inside text-sm mt-1">
+                {errorProvinces && <li>Gagal memuat data provinsi</li>}
+                {errorCities && <li>Gagal memuat data kota/kabupaten</li>}
+                {errorDistricts && <li>Gagal memuat data kecamatan</li>}
+                {errorVillages && <li>Gagal memuat data kelurahan</li>}
+              </ul>
+            </div>
+          )}
+
           {/* Province Select */}
           <div className="space-y-2">
             <label
@@ -101,10 +104,13 @@ const App = () => {
                 setSelectedDistrict("");
                 setSelectedVillage("");
               }}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-white text-gray-900"
+              disabled={isLoadingProvinces}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-white text-gray-900 disabled:bg-gray-100 disabled:cursor-not-allowed"
             >
-              <option value="">--- Pilih Provinsi ---</option>
-              {provinces?.map((province: Province) => {
+              <option value="">
+                {isLoadingProvinces ? "Memuat..." : "--- Pilih Provinsi ---"}
+              </option>
+              {provinces?.map((province: Region) => {
                 return (
                   <option key={province.id} value={province.id}>
                     {province.name}
@@ -131,11 +137,13 @@ const App = () => {
                 setSelectedDistrict("");
                 setSelectedVillage("");
               }}
-              disabled={!selectedProvince}
+              disabled={!selectedProvince || isLoadingCities}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-white text-gray-900 disabled:bg-gray-100 disabled:cursor-not-allowed"
             >
-              <option value="">--- Pilih Kota/Kabupaten ---</option>
-              {cities?.map((city: City) => {
+              <option value="">
+                {isLoadingCities ? "Memuat..." : "--- Pilih Kota/Kabupaten ---"}
+              </option>
+              {cities?.map((city: Region) => {
                 return (
                   <option key={city.id} value={city.id}>
                     {city.name}
@@ -161,11 +169,13 @@ const App = () => {
                 setSelectedDistrict(e.target.value);
                 setSelectedVillage("");
               }}
-              disabled={!selectedCity}
+              disabled={!selectedCity || isLoadingDistricts}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-white text-gray-900 disabled:bg-gray-100 disabled:cursor-not-allowed"
             >
-              <option value="">--- Pilih Kecamatan ---</option>
-              {districts?.map((district: District) => {
+              <option value="">
+                {isLoadingDistricts ? "Memuat..." : "--- Pilih Kecamatan ---"}
+              </option>
+              {districts?.map((district: Region) => {
                 return (
                   <option key={district.id} value={district.id}>
                     {district.name}
@@ -188,11 +198,13 @@ const App = () => {
               id="village"
               value={selectedVillage}
               onChange={(e) => setSelectedVillage(e.target.value)}
-              disabled={!selectedDistrict}
+              disabled={!selectedDistrict || isLoadingVillages}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-white text-gray-900 disabled:bg-gray-100 disabled:cursor-not-allowed"
             >
-              <option value="">--- Pilih Kelurahan ---</option>
-              {villages?.map((village: Village) => {
+              <option value="">
+                {isLoadingVillages ? "Memuat..." : "--- Pilih Kelurahan ---"}
+              </option>
+              {villages?.map((village: Region) => {
                 return (
                   <option key={village.id} value={village.id}>
                     {village.name}
