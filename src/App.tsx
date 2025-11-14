@@ -1,5 +1,16 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
+import L from "leaflet";
+
+// Fix for default markers in react-leaflet
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
+  iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
+  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
+});
 
 const API_BASE_URL = "https://www.emsifa.com/api-wilayah-indonesia/api";
 const KODE_POS_API_BASE_URL = "https://kodepos.vercel.app";
@@ -55,6 +66,22 @@ const App = () => {
   const [selectedDistrict, setSelectedDistrict] = useState<string>("");
   const [selectedVillage, setSelectedVillage] = useState<string>("");
   const [selectedPostalCode, setSelectedPostalCode] = useState<string>("");
+
+  // Get the currently selected postal code data (for map display)
+  const getCurrentPostalCodeData = () => {
+    if (!postalCode?.data || postalCode.data.length === 0) return null;
+
+    if (postalCode.data.length === 1) {
+      return postalCode.data[0];
+    }
+
+    // If multiple results, use selected postal code or first one
+    if (selectedPostalCode) {
+      return postalCode.data.find((item) => item.code.toString() === selectedPostalCode) || postalCode.data[0];
+    }
+
+    return postalCode.data[0];
+  };
 
   const {
     data: provinces,
@@ -174,7 +201,7 @@ const App = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md mx-auto">
+      <div className="max-w-4xl mx-auto">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Data Wilayah Indonesia
@@ -369,6 +396,52 @@ const App = () => {
               />
             )}
           </div>
+
+          {/* Map Display */}
+          {(() => {
+            const currentData = getCurrentPostalCodeData();
+            const hasLocationData = currentData && selectedVillage;
+
+            // Default Indonesia center and zoom
+            const defaultCenter: [number, number] = [-2.6, 118.0];
+            const defaultZoom = 5;
+
+            return (
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  Lokasi
+                </label>
+                <div className="h-96 w-full rounded-lg overflow-hidden border border-gray-300">
+                  <MapContainer
+                    center={hasLocationData ? [currentData.latitude, currentData.longitude] : defaultCenter}
+                    zoom={hasLocationData ? 13 : defaultZoom}
+                    style={{ height: "100%", width: "100%" }}
+                    key={`${hasLocationData ? 'specific' : 'default'}-${currentData?.code || 'none'}`}
+                  >
+                    <TileLayer
+                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+                    {hasLocationData && (
+                      <Marker
+                        position={[currentData.latitude, currentData.longitude]}
+                      >
+                        <Popup>
+                          <div className="text-sm">
+                            <p className="font-semibold">{currentData.village}</p>
+                            <p>Kec. {currentData.district}</p>
+                            <p>{currentData.regency}</p>
+                            <p>{currentData.province}</p>
+                            <p className="font-bold mt-1">Kode Pos: {currentData.code}</p>
+                          </div>
+                        </Popup>
+                      </Marker>
+                    )}
+                  </MapContainer>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
     </div>
